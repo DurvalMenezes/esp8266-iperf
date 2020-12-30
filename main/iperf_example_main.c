@@ -23,6 +23,8 @@
 #include "argtable3/argtable3.h"
 #include "cmd_decl.h"
 
+#include "cmd_autorun.h"
+#include "rom/uart.h"
 
 #define WIFI_CONNECTED_BIT BIT0
 
@@ -70,7 +72,6 @@ static void initialize_console()
 void app_main(void)
 {
     esp_err_t ret = nvs_flash_init();
-    // if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES) { // 20201227 DM There's no ESP_ERR_NVS_NEW_VERSION_FOUND on ESP8266_RTOS_SDK
         ESP_ERROR_CHECK(nvs_flash_erase());
         ret = nvs_flash_init();
@@ -78,12 +79,39 @@ void app_main(void)
     ESP_ERROR_CHECK( ret );
 
     initialise_wifi();
+
+    // Check whether autorun is set and gets it ready to execute, then gives the user an opportunity to interrupt
+    // This *must* happen before initialize_console() right below, or else uart_rx_one_char() stops working.
+    char *autorun_cmdlist;
+    int err;
+    if ((autorun_cmdlist = fn_autorun_get()) != NULL) {
+        printf("ATTENTION: Autorun command-list is [%s]\n", autorun_cmdlist);
+        for (int ix=5; ix>0; --ix) {
+            printf("\rPress ^C to abort, or <Enter> to execute immediatelly before count reaches zero: %d", ix);
+            static uint8_t ch;
+            if ((err = uart_rx_one_char(&ch)) == OK) {
+                if (ch == '\n' || ch == '\r') {
+                    printf("\n\nSkipping count and going ahead with autorun");
+                    break;
+                }
+                else if (ch == '\x03') { //ETX aka ^C
+                    printf("\n\nAutorun interrupted");
+                    autorun_cmdlist = NULL;
+                    break;
+                }
+            }
+            vTaskDelay(1000 / portTICK_PERIOD_MS); //delay for 1 second
+        }
+        printf("\n\n");
+    }
+
     initialize_console();
 
     /* Register commands */
     esp_console_register_help_command();
     register_system();
     register_wifi();
+    register_autorun();
 
     /* Prompt to be printed before each line.
      * This can be customized, made dynamic, etc.
@@ -97,8 +125,11 @@ void app_main(void)
     printf(" |  2. Configure device to station or soft-AP     |\n");
     printf(" |  3. Setup WiFi connection                      |\n");
     printf(" |  4. Run iperf to test UDP/TCP RX/TX throughput |\n");
-    printf(" |                                                |\n");
-    printf(" =================================================\n\n");
+    printf(" =================================================|\n");
+    printf("\n");
+    printf(" See also the `autorun_*` commands for headless/automated operation, eg:\n");
+    printf("    autorun_set \"sta SSID PASSWORD; autorun_delay 2000; iperf -s; autorun_wait iperf_traffic; restart\"\n");
+    printf("\n\n");
 
     /* Figure out if the terminal supports escape sequences */
     int probe_status = linenoiseProbe();
@@ -116,17 +147,28 @@ void app_main(void)
 #endif //CONFIG_LOG_COLORS
     }
 
+    char *autorun_cmd = autorun_cmdlist;
     /* Main loop */
     while (true) {
-        /* Get a line using linenoise.
-         * The line is returned when ENTER is pressed.
-         */
-        char *line = linenoise(prompt);
-        if (line == NULL) { /* Ignore empty lines */
-            continue;
+        char *line;
+        if (autorun_cmd != NULL) {
+            //get line as the next command from autorun_cmdlist
+            line = autorun_cmd;
+            autorun_cmd=index(autorun_cmd,';'); //advance to the end of the current command (next `;` character)
+            if (autorun_cmd)
+                *(autorun_cmd++) = '\0';    //replace ';' with NUL so as to properly finish the line, and advance autorun to the beginning of the next command
+            printf("%s [Autorun] now executing `%s`\n", prompt, line);
+        } else {
+            /* Get a line using linenoise.
+             * The line is returned when ENTER is pressed.
+             */
+            line = linenoise(prompt);
+            if (line == NULL) { /* Ignore empty lines */
+                continue;
+            }
+            /* Add the command to the history */
+            linenoiseHistoryAdd(line);
         }
-        /* Add the command to the history */
-        linenoiseHistoryAdd(line);
 
         /* Try to run the command */
         int ret;

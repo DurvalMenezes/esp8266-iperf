@@ -1,9 +1,11 @@
-# Porting Notes
+# iPerf benchmark example for the ESP8266 
+## Porting Notes
 
-This is the iperf software that comes with the ESP32 IDF (on version 3.3, at $IDF_PATH/examples/wifi/iperf)
+This is the iperf example that comes with the ESP32 IDF (on version 3.3, at $IDF_PATH/examples/wifi/iperf)
 adapted to compile with the ESP8266 RTOS SDK (coincidentally, also version 3.3) and run on ESP8266 hardware.
 
 Only server mode (ie, `iperf -s` on the ESP8266) was tested, but client mode (`iperf -c`) should also work.
+Re: TCP mode vs UDP, TCP works well but I've seen some strange things with UDP (I think they are also present in the original version from Espressif).
 
 Tested on NodeMCU-like hardware labeled "MODEL ESP-12F" and "MODEL ESP-12E" both "VENDOR DOITING", but should
 also work on other ESP8266 hardware with sufficiently standard WiFi.
@@ -18,6 +20,9 @@ performance than the ESP-12F:
                 [ ID] Interval       Transfer     Bandwidth
                 [  3]  0.0-10.3 sec  3.38 MBytes  2.75 Mbits/sec
 
+Also, the ESP-12F takes longer to connect to Wifi (over 1 second to set the interface address as part of DHCP, versus under 1 second for the ESP-12E).
+So far, I'm frankly unimpressed with the "optimized" ESP-12F...
+
 On both cases, the modules were operating in "sta" mode connected to the same WAP (an Android phone in hotspot mode),
 and the client was a laptop running Linux Ubuntu 18.04 and iperf "version 2.0.10 (2 June 2018) pthreads".
 The commands on both ESP8266 modules were:
@@ -29,7 +34,13 @@ and on the Linux machine:
 
         iperf -c $ESP8266_IP
 
-For any feedback, please contact me via the Github repo I opened for this project: github.com/DurvalMenezes/esp8266-iperf
+## New autorun functionality
+In order to facilitate headless/automated testing (ie, with no USB connected to the ESP8266 console), I implemented an 'autorun' facility; 
+please check the `help` output for the autorun_* commands for details, but to use it to implement fully automated testing in server mode, you could use something like this:
+	autorun_set "sta yourSSID yourPWD; autorun_delay 2000; iperf -s; autorun_wait iperf_traffic; restart"
+
+## Contact
+Your feedback regarding this port is appreciated, please contact me via the Github repo I opened for this project: github.com/DurvalMenezes/esp8266-iperf
 
 Cheers,
 -- Durval Menezes 2020/12/27.
