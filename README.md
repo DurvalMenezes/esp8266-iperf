@@ -4,7 +4,7 @@
 This is the iperf example that comes with the ESP32 IDF (on version 3.3, at $IDF_PATH/examples/wifi/iperf)
 adapted to compile with the ESP8266 RTOS SDK (coincidentally, also version 3.3) and run on ESP8266 hardware.
 
-Only server mode (ie, `iperf -s` on the ESP8266) was tested, but client mode (`iperf -c`) should also work.
+I only tested it exhaustively in server mode (ie, `iperf -s` on the ESP8266), but client mode (`iperf -c`) was tested perfunctorily and also worked.
 Re: TCP mode vs UDP, TCP works well but I've seen some strange things with UDP (I think they also happen in the original version from Espressif).
 
 Tested on NodeMCU-like hardware labeled "MODEL ESP-12F" and "MODEL ESP-12E" both "VENDOR DOITING", but should
@@ -39,6 +39,15 @@ In order to facilitate headless/automated testing (ie, with no USB connected to 
 please check the `help` output for the autorun_* commands for details, but to use it to implement fully automated testing in server mode, you could use something like this:
 
 	autorun_set "sta yourSSID yourPWD; autorun_delay 2000; iperf -s; autorun_wait iperf_traffic; restart"
+
+#New hostname command
+Added the `hostname XXXX` command, which sets the hostname for the ESP8266. This is useful because it will then be passed in DHCP requests, and if your LAN's DHCP server is 
+integrated with its DNS server, you will then have direct/reverse DNS resolution for that name and IP (works wonders on my Android hotspot). Notice that it should be called
+*before* the `ap` and/or `sta` commands, or else it will have no effect.
+
+## Minor fixes and tweaks
+I fixed a small error on Espressif's TCP server code, where it would continue to run until the time to transmit for (`-t` option) ran out, even if the client finished earlier;
+now it will properly finish along with the client.
 
 ## Contact
 Your feedback regarding this port is appreciated, please contact me via the Github repo I opened for this project: github.com/DurvalMenezes/esp8266-iperf

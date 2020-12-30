@@ -266,19 +266,10 @@ static esp_err_t fn_autorun_cmd_wait(int argc, char **argv)
 
 void register_autorun()
 {
-    set_args.cmdlist = arg_str1(NULL, NULL, "<cmdlist>", "Command-list to autorun after boot: list of commands + arguments, exactly as typed, separated by semicollon");
-    set_args.end = arg_end(2);
+    /*** set up and register each of the console commands processed by this module ***/
 
+    //Command: autorun_get
     get_args.end = arg_end(2);
-
-    erase_args.end = arg_end(2);
-
-    delay_args.delay = arg_int0(NULL, NULL, "<milliseconds>", "number of milliseconds to delay");
-    delay_args.end = arg_end(2);
-
-    wait_args.taskname = arg_str1(NULL, NULL, "<taskname>", "Name of the task to wait for");
-    wait_args.end = arg_end(2);
-
     const esp_console_cmd_t autorun_get_cmd = {
         .command = "autorun_get",
         .help = "get the current autorun setting",
@@ -286,7 +277,12 @@ void register_autorun()
         .func = &fn_autorun_cmd_get,
         .argtable = &get_args
     };
+    ESP_ERROR_CHECK( esp_console_cmd_register(&autorun_get_cmd) );
 
+    //Command: autorun_set
+    set_args.cmdlist = arg_str1(NULL, NULL, "<cmdlist>", "Command-list to autorun after boot: list of commands + arguments, exactly as\n" 
+				                           	"typed, separated by semicollons");
+    set_args.end = arg_end(2);
     const esp_console_cmd_t autorun_set_cmd = {
         .command = "autorun_set",
         .help = "configure a list of commands to run automatically after each boot",
@@ -294,7 +290,10 @@ void register_autorun()
         .func = &fn_autorun_cmd_set,
         .argtable = &set_args
     };
+    ESP_ERROR_CHECK( esp_console_cmd_register(&autorun_set_cmd) );
 
+    //Command: autorun_erase
+    erase_args.end = arg_end(2);
     const esp_console_cmd_t autorun_erase_cmd = {
         .command = "autorun_erase",
         .help = "autorun erase command",
@@ -302,7 +301,11 @@ void register_autorun()
         .func = &fn_autorun_cmd_erase,
         .argtable = &erase_args
     };
+    ESP_ERROR_CHECK( esp_console_cmd_register(&autorun_erase_cmd) );
 
+    //Command: autorun_delay
+    delay_args.delay = arg_int0(NULL, NULL, "<milliseconds>", "number of milliseconds to delay");
+    delay_args.end = arg_end(2);
     const esp_console_cmd_t autorun_delay_cmd = {
         .command = "autorun_delay",
         .help = "delay execution for a number of milliseconds",
@@ -310,7 +313,11 @@ void register_autorun()
         .func = &fn_autorun_cmd_delay,
         .argtable = &delay_args
     };
+    ESP_ERROR_CHECK( esp_console_cmd_register(&autorun_delay_cmd) );
 
+    //Command: autorun_wait
+    wait_args.taskname = arg_str1(NULL, NULL, "<taskname>", "Name of the task to wait for");
+    wait_args.end = arg_end(2);
     const esp_console_cmd_t autorun_wait_cmd = {
         .command = "autorun_wait",
         .help = "wait for a task to finish",
@@ -318,11 +325,6 @@ void register_autorun()
         .func = &fn_autorun_cmd_wait,
         .argtable = &wait_args
     };
-
-    ESP_ERROR_CHECK( esp_console_cmd_register(&autorun_get_cmd) );
-    ESP_ERROR_CHECK( esp_console_cmd_register(&autorun_set_cmd) );
-    ESP_ERROR_CHECK( esp_console_cmd_register(&autorun_erase_cmd) );
-    ESP_ERROR_CHECK( esp_console_cmd_register(&autorun_delay_cmd) );
     ESP_ERROR_CHECK( esp_console_cmd_register(&autorun_wait_cmd) );
 }
 

@@ -162,39 +162,46 @@ static esp_err_t IRAM_ATTR iperf_run_tcp_server(void)
 
     buffer = s_iperf_ctrl.buffer;
     want_recv = s_iperf_ctrl.buffer_len;
-    while (!s_iperf_ctrl.finish) {
 
-        /*TODO need to change to non-block mode */
-        sockfd = accept(listen_socket, (struct sockaddr *)&remote_addr, &addr_len);
-        if (sockfd < 0) {
-            iperf_show_socket_error_reason("tcp server listen", listen_socket);
-            close(listen_socket);
-            return ESP_FAIL;
-        } else {
-            printf("accept: %s,%d\n", inet_ntoa(remote_addr.sin_addr), htons(remote_addr.sin_port));
-            iperf_start_report();
+    int rc = ESP_OK; // return code for this function, either ESP_OK or ESP_FAIL
 
-            t.tv_sec = IPERF_SOCKET_RX_TIMEOUT;
-            setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &t, sizeof(t));
-        }
+    /*TODO need to change to non-block mode */
+    sockfd = accept(listen_socket, (struct sockaddr *)&remote_addr, &addr_len);
+    if (sockfd < 0) {
+        iperf_show_socket_error_reason("tcp server listen", listen_socket);
+        close(listen_socket);
+        rc = ESP_FAIL;
+    } else {
+        printf("accept: %s,%d\n", inet_ntoa(remote_addr.sin_addr), htons(remote_addr.sin_port));
+        iperf_start_report();
+
+        t.tv_sec = IPERF_SOCKET_RX_TIMEOUT;
+        setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &t, sizeof(t));
 
         while (!s_iperf_ctrl.finish) {
             actual_recv = recv(sockfd, buffer, want_recv, 0);
-            if (actual_recv < 0) {
-                iperf_show_socket_error_reason("tcp server recv", listen_socket);
-                s_iperf_ctrl.finish = true;
+            if (actual_recv <= 0) {
+                if (actual_recv < 0) {
+                    iperf_show_socket_error_reason("tcp server recv", listen_socket);
+                    rc = ESP_FAIL;
+                } 
+                // if actual_recv == 0 then it's not an error, the client just finished and closed the connection, so we do the same
                 break;
             } else {
+                // just a normal read, account for it and continue
                 s_iperf_ctrl.total_len += actual_recv;
             }
         }
 
+        s_iperf_ctrl.finish = true; // signals it's finished so iperf_report_task() can finish itself
+                                    // XXX wouldn't it be better to use a semaphore or some such?
+
         close(sockfd);
     }
 
-    s_iperf_ctrl.finish = true;
     close(listen_socket);
-    return ESP_OK;
+
+    return rc;
 }
 
 static esp_err_t IRAM_ATTR iperf_run_udp_server(void)

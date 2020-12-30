@@ -37,17 +37,25 @@ typedef struct {
     struct arg_str *password;
     struct arg_end *end;
 } wifi_args_t;
+static wifi_args_t sta_args;
+static wifi_args_t ap_args;
 
 typedef struct {
     struct arg_str *ssid;
     struct arg_end *end;
 } wifi_scan_arg_t;
-
-static wifi_args_t sta_args;
 static wifi_scan_arg_t scan_args;
-static wifi_args_t ap_args;
+
+typedef struct {
+    struct arg_str *hostname;
+    struct arg_end *end;
+} wifi_hostname_arg_t;
+static wifi_hostname_arg_t hostname_args;
+
 static bool reconnect = true;
 static const char *TAG="cmd_wifi";
+
+static char Wifi_hostname[TCPIP_HOSTNAME_MAX_SIZE+1] = "NOT_SET";
 
 static EventGroupHandle_t wifi_event_group;
 const int CONNECTED_BIT = BIT0;
@@ -77,26 +85,32 @@ static void scan_done_handler(void)
 static esp_err_t event_handler(void *ctx, system_event_t *event)
 {
     switch(event->event_id) {
-    case SYSTEM_EVENT_STA_GOT_IP:
-        xEventGroupClearBits(wifi_event_group, DISCONNECTED_BIT);
-        xEventGroupSetBits(wifi_event_group, CONNECTED_BIT);
-        break;
-    case SYSTEM_EVENT_SCAN_DONE:
-        scan_done_handler();
-        ESP_LOGI(TAG, "sta scan done");
-        break;
-    case SYSTEM_EVENT_STA_DISCONNECTED:
-        if (reconnect) {
-            ESP_LOGI(TAG, "sta disconnect, reconnect...");
-            esp_wifi_connect();
-        } else {
-            ESP_LOGI(TAG, "sta disconnect");
-        }
-        xEventGroupClearBits(wifi_event_group, CONNECTED_BIT);
-        xEventGroupSetBits(wifi_event_group, DISCONNECTED_BIT);
-        break;
-    default:
-        break;
+        case SYSTEM_EVENT_STA_GOT_IP:
+            xEventGroupClearBits(wifi_event_group, DISCONNECTED_BIT);
+            xEventGroupSetBits(wifi_event_group, CONNECTED_BIT);
+            break;
+        case SYSTEM_EVENT_SCAN_DONE:
+            scan_done_handler();
+            ESP_LOGI(TAG, "sta scan done");
+            break;
+        case SYSTEM_EVENT_STA_DISCONNECTED:
+            if (reconnect) {
+                ESP_LOGI(TAG, "sta disconnect, reconnect...");
+                esp_wifi_connect();
+            } else {
+                ESP_LOGI(TAG, "sta disconnect");
+            }
+            xEventGroupClearBits(wifi_event_group, CONNECTED_BIT);
+            xEventGroupSetBits(wifi_event_group, DISCONNECTED_BIT);
+            break;
+        case SYSTEM_EVENT_STA_START:
+            ESP_ERROR_CHECK( tcpip_adapter_set_hostname(TCPIP_ADAPTER_IF_STA, Wifi_hostname) );
+            break;
+        case SYSTEM_EVENT_AP_START: 
+            ESP_ERROR_CHECK( tcpip_adapter_set_hostname(TCPIP_ADAPTER_IF_AP, Wifi_hostname) );
+            break;
+        default:
+            break;
     }
     return ESP_OK;
 }
@@ -119,6 +133,11 @@ void initialise_wifi(void)
     ESP_ERROR_CHECK( esp_wifi_set_mode(WIFI_MODE_NULL) );
     ESP_ERROR_CHECK( esp_wifi_start() );
     initialized = true;
+
+    static uint8_t base_macaddr[6] = {0xf0, 0xda, 0x5e, 0x24, 0x24, 0x01}; ESP_ERROR_CHECK( esp_efuse_mac_get_default(base_macaddr) );
+
+    snprintf(Wifi_hostname, sizeof(Wifi_hostname), "ESP-%02X%02X%02X", base_macaddr[3], base_macaddr[4], base_macaddr[5]); //default hostname, same as in esp8266-arduino 
+    ESP_LOGI(TAG, "initialise_wifi(): set default hostname to '%s'", Wifi_hostname);
 }
 
 static bool wifi_cmd_sta_join(const char* ssid, const char* pass)
@@ -220,8 +239,8 @@ static bool wifi_cmd_ap_set(const char* ssid, const char* pass)
         wifi_config.ap.authmode = WIFI_AUTH_OPEN;
     }
 
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
-    ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_AP, &wifi_config));
+    ESP_ERROR_CHECK( esp_wifi_set_mode(WIFI_MODE_AP) );
+    ESP_ERROR_CHECK( esp_wifi_set_config(ESP_IF_WIFI_AP, &wifi_config) );
     return true;
 }
 
@@ -370,40 +389,35 @@ static int wifi_cmd_iperf(int argc, char** argv)
     return 0;
 }
 
+static esp_err_t wifi_cmd_hostname(int argc, char **argv)
+{
+    if (argc == 1) {
+        ESP_LOGI(TAG, "fn_autorun_cmd_hostname(): current hostname is '%s'", Wifi_hostname);
+        return ESP_OK;
+    }
+
+    int nerrors = arg_parse(argc, argv, (void **) &hostname_args);
+    if (nerrors != 0) {
+        arg_print_errors(stderr, hostname_args.end, argv[0]);
+        return 1;
+    }
+
+    strlcpy(Wifi_hostname, hostname_args.hostname->sval[0], sizeof(Wifi_hostname));
+
+    ESP_LOGI(TAG, "wifi_cmd_hostname(): this node's hostname set to '%s'.", hostname_args.hostname->sval[0]);
+
+    return ESP_OK;
+}
+
+
 void register_wifi()
 {
-    sta_args.ssid = arg_str1(NULL, NULL, "<ssid>", "SSID of AP");
-    sta_args.password = arg_str0(NULL, NULL, "<pass>", "password of AP");
-    sta_args.end = arg_end(2);
+    /*** set up and register each of the console commands processed by this module ***/
 
-    const esp_console_cmd_t sta_cmd = {
-        .command = "sta",
-        .help = "WiFi is station mode, join specified soft-AP",
-        .hint = NULL,
-        .func = &wifi_cmd_sta,
-        .argtable = &sta_args
-    };
-
-    ESP_ERROR_CHECK( esp_console_cmd_register(&sta_cmd) );
-
-    scan_args.ssid = arg_str0(NULL, NULL, "<ssid>", "SSID of AP want to be scanned");
-    scan_args.end = arg_end(1);
-
-    const esp_console_cmd_t scan_cmd = {
-        .command = "scan",
-        .help = "WiFi is station mode, start scan ap",
-        .hint = NULL,
-        .func = &wifi_cmd_scan,
-        .argtable = &scan_args
-    };
-
+    //Command: ap
     ap_args.ssid = arg_str1(NULL, NULL, "<ssid>", "SSID of AP");
     ap_args.password = arg_str0(NULL, NULL, "<pass>", "password of AP");
     ap_args.end = arg_end(2);
-
-
-    ESP_ERROR_CHECK( esp_console_cmd_register(&scan_cmd) );
-
     const esp_console_cmd_t ap_cmd = {
         .command = "ap",
         .help = "AP mode, configure ssid and password",
@@ -411,9 +425,34 @@ void register_wifi()
         .func = &wifi_cmd_ap,
         .argtable = &ap_args
     };
-
     ESP_ERROR_CHECK( esp_console_cmd_register(&ap_cmd) );
 
+    //Command: sta
+    sta_args.ssid = arg_str1(NULL, NULL, "<ssid>", "SSID of AP");
+    sta_args.password = arg_str0(NULL, NULL, "<pass>", "password of AP");
+    sta_args.end = arg_end(2);
+    const esp_console_cmd_t sta_cmd = {
+        .command = "sta",
+        .help = "WiFi is station mode, join specified soft-AP",
+        .hint = NULL,
+        .func = &wifi_cmd_sta,
+        .argtable = &sta_args
+    };
+    ESP_ERROR_CHECK( esp_console_cmd_register(&sta_cmd) );
+
+    //Command: scan
+    scan_args.ssid = arg_str0(NULL, NULL, "<ssid>", "SSID of AP want to be scanned");
+    scan_args.end = arg_end(1);
+    const esp_console_cmd_t scan_cmd = {
+        .command = "scan",
+        .help = "WiFi is station mode, start scan ap",
+        .hint = NULL,
+        .func = &wifi_cmd_scan,
+        .argtable = &scan_args
+    };
+    ESP_ERROR_CHECK( esp_console_cmd_register(&scan_cmd) );
+
+    //Command: query
     const esp_console_cmd_t query_cmd = {
         .command = "query",
         .help = "query WiFi info",
@@ -422,6 +461,7 @@ void register_wifi()
     };
     ESP_ERROR_CHECK( esp_console_cmd_register(&query_cmd) );
 
+    //Command: iperf
     iperf_args.ip = arg_str0("c", "client", "<ip>", "run in client mode, connecting to <host>");
     iperf_args.server = arg_lit0("s", "server", "run in server mode");
     iperf_args.udp = arg_lit0("u", "udp", "use UDP rather than TCP");
@@ -437,6 +477,22 @@ void register_wifi()
         .func = &wifi_cmd_iperf,
         .argtable = &iperf_args
     };
-
     ESP_ERROR_CHECK( esp_console_cmd_register(&iperf_cmd) );
+
+    //Command: hostname
+    hostname_args.hostname = arg_str1(NULL, NULL, "<hostname>", "This node's hostname will be set to <hostname>\n"
+                                                                "(will be added to DHCP requests and, if the DHCP server integrates with the\n"
+                                                                "LAN's DNS server, will show in direct and reverse DNS)\n"
+                                                                "This command should be called *before* the commands `sta` and `ap`, so the\n"
+                                                                "hostname is already set when they run; otherwise, a MACAddr-based default\n"
+                                                                "hostname will be used instead.");
+    hostname_args.end = arg_end(2);
+    const esp_console_cmd_t hostname_cmd = {
+        .command = "hostname",
+        .help = "Set this node's hostname",
+        .hint = NULL,
+        .func = &wifi_cmd_hostname,
+        .argtable = &hostname_args
+    };
+    ESP_ERROR_CHECK( esp_console_cmd_register(&hostname_cmd) );
 }
