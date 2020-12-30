@@ -5,7 +5,7 @@ This is the iperf example that comes with the ESP32 IDF (on version 3.3, at $IDF
 adapted to compile with the ESP8266 RTOS SDK (coincidentally, also version 3.3) and run on ESP8266 hardware.
 
 Only server mode (ie, `iperf -s` on the ESP8266) was tested, but client mode (`iperf -c`) should also work.
-Re: TCP mode vs UDP, TCP works well but I've seen some strange things with UDP (I think they are also present in the original version from Espressif).
+Re: TCP mode vs UDP, TCP works well but I've seen some strange things with UDP (I think they also happen in the original version from Espressif).
 
 Tested on NodeMCU-like hardware labeled "MODEL ESP-12F" and "MODEL ESP-12E" both "VENDOR DOITING", but should
 also work on other ESP8266 hardware with sufficiently standard WiFi.
@@ -37,6 +37,7 @@ and on the Linux machine:
 ## New autorun functionality
 In order to facilitate headless/automated testing (ie, with no USB connected to the ESP8266 console), I implemented an 'autorun' facility; 
 please check the `help` output for the autorun_* commands for details, but to use it to implement fully automated testing in server mode, you could use something like this:
+
 	autorun_set "sta yourSSID yourPWD; autorun_delay 2000; iperf -s; autorun_wait iperf_traffic; restart"
 
 ## Contact
