@@ -40,7 +40,7 @@ please check the `help` output for the autorun_* commands for details, but to us
 
 	autorun_set "sta yourSSID yourPWD; autorun_delay 2000; iperf -s; autorun_wait iperf_traffic; restart"
 
-#New hostname command
+## New hostname command
 Added the `hostname XXXX` command, which sets the hostname for the ESP8266. This is useful because it will then be passed in DHCP requests, and if your LAN's DHCP server is 
 integrated with its DNS server, you will then have direct/reverse DNS resolution for that name and IP (works wonders on my Android hotspot). Notice that it should be called
 *before* the `ap` and/or `sta` commands, or else it will have no effect.
