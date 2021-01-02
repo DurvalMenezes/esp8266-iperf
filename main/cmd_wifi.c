@@ -20,6 +20,8 @@
 #include "esp_event_loop.h"
 #include "iperf.h"
 
+#include "lwip/stats.h"
+
 typedef struct {
     struct arg_str *ip;
     struct arg_lit *server;
@@ -409,6 +411,40 @@ static esp_err_t wifi_cmd_hostname(int argc, char **argv)
     return ESP_OK;
 }
 
+static int wifi_cmd_stats(int argc, char** argv)
+{
+    ESP_LOGI(TAG, "wifi_cmd_stats(): Wifi adapter network stats follow");
+
+    // link-level statistics
+    printf("link.{xmit=%d, recv=%d, fw=%d, drop=%d, chkerr=%d, lenerr=%d, memerr=%d, rterr=%d, proterr=%d, opterr=%d, err=%d}\n",
+        lwip_stats.link.xmit, lwip_stats.link.recv, lwip_stats.link.fw, lwip_stats.link.drop, lwip_stats.link.chkerr, lwip_stats.link.lenerr,
+        lwip_stats.link.memerr, lwip_stats.link.rterr, lwip_stats.link.proterr, lwip_stats.link.opterr, lwip_stats.link.err);
+
+    // IP fragmentation statistics
+#if IPFRAG_STATS // ip_frag stats are only available in certain circunstances (right now, if either IP_REASSEMBLY or IP_FRAG are set), so only proceed if they are
+    printf("ip_frag.{xmit=%d, recv=%d, fw=%d, drop=%d, chkerr=%d, lenerr=%d, memerr=%d, rterr=%d, proterr=%d, opterr=%d, err=%d}\n",
+        lwip_stats.ip_frag.xmit, lwip_stats.ip_frag.recv, lwip_stats.ip_frag.fw, lwip_stats.ip_frag.drop, lwip_stats.ip_frag.chkerr, lwip_stats.ip_frag.lenerr,
+        lwip_stats.ip_frag.memerr, lwip_stats.ip_frag.rterr, lwip_stats.ip_frag.proterr, lwip_stats.ip_frag.opterr, lwip_stats.ip_frag.err);
+#endif
+
+    // IP-level statistics
+    printf("ip.{xmit=%d, recv=%d, fw=%d, drop=%d, chkerr=%d, lenerr=%d, memerr=%d, rterr=%d, proterr=%d, opterr=%d, err=%d}\n",
+        lwip_stats.ip.xmit, lwip_stats.ip.recv, lwip_stats.ip.fw, lwip_stats.ip.drop, lwip_stats.ip.chkerr, lwip_stats.ip.lenerr,
+        lwip_stats.ip.memerr, lwip_stats.ip.rterr, lwip_stats.ip.proterr, lwip_stats.ip.opterr, lwip_stats.ip.err);
+
+    // UDP protocol statistics
+    printf("udp.{xmit=%d, recv=%d, fw=%d, drop=%d, chkerr=%d, lenerr=%d, memerr=%d, rterr=%d, proterr=%d, opterr=%d, err=%d}\n",
+        lwip_stats.udp.xmit, lwip_stats.udp.recv, lwip_stats.udp.fw, lwip_stats.udp.drop, lwip_stats.udp.chkerr, lwip_stats.udp.lenerr,
+        lwip_stats.udp.memerr, lwip_stats.udp.rterr, lwip_stats.udp.proterr, lwip_stats.udp.opterr, lwip_stats.udp.err);
+
+    // TCP protocol statistics
+    printf("tcp.{xmit=%d, recv=%d, fw=%d, drop=%d, chkerr=%d, lenerr=%d, memerr=%d, rterr=%d, proterr=%d, opterr=%d, err=%d}\n",
+        lwip_stats.tcp.xmit, lwip_stats.tcp.recv, lwip_stats.tcp.fw, lwip_stats.tcp.drop, lwip_stats.tcp.chkerr, lwip_stats.tcp.lenerr,
+        lwip_stats.tcp.memerr, lwip_stats.tcp.rterr, lwip_stats.tcp.proterr, lwip_stats.tcp.opterr, lwip_stats.tcp.err);
+
+    ESP_LOGI(TAG, "wifi_cmd_stats(): Wifi adapter network stats follow");
+    return 0;
+}
 
 void register_wifi()
 {
@@ -495,4 +531,13 @@ void register_wifi()
         .argtable = &hostname_args
     };
     ESP_ERROR_CHECK( esp_console_cmd_register(&hostname_cmd) );
+
+    //Command: stats
+    const esp_console_cmd_t stats_cmd = {
+        .command = "stats",
+        .help = "Network wifi statistics",
+        .hint = NULL,
+        .func = &wifi_cmd_stats,
+    };
+    ESP_ERROR_CHECK( esp_console_cmd_register(&stats_cmd) );
 }

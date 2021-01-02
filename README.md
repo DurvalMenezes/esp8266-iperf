@@ -45,6 +45,9 @@ Added the `hostname XXXX` command, which sets the hostname for the ESP8266. This
 integrated with its DNS server, you will then have direct/reverse DNS resolution for that name and IP (works wonders on my Android hotspot). Notice that it should be called
 *before* the `ap` and/or `sta` commands, or else it will have no effect.
 
+## New stats command
+Added a `stats` command to show network/adapter statistics; these are obtained from the LWIP component, you can learn more about them by looking at the respective include file: $IDF_PATH/components/lwip/lwip/src/include/lwip/stats.h.
+
 ## Minor fixes and tweaks
 I fixed a small error on Espressif's TCP server code, where it would continue to run until the time to transmit for (`-t` option) ran out, even if the client finished earlier;
 now it will properly finish along with the client.

@@ -27,20 +27,12 @@
 
 static const char current_namespace[16] = "autorun";
 
-static const char *TAG = "autorun";
+static const char *TAG = "cmd_autorun";
 
 static struct {
     struct arg_str *cmdlist;
     struct arg_end *end;
 } set_args;
-
-static struct {
-    struct arg_end *end;
-} get_args;
-
-static struct {
-    struct arg_end *end;
-} erase_args;
 
 static struct {
     struct arg_int *delay;
@@ -269,13 +261,11 @@ void register_autorun()
     /*** set up and register each of the console commands processed by this module ***/
 
     //Command: autorun_get
-    get_args.end = arg_end(2);
     const esp_console_cmd_t autorun_get_cmd = {
         .command = "autorun_get",
         .help = "get the current autorun setting",
         .hint = NULL,
         .func = &fn_autorun_cmd_get,
-        .argtable = &get_args
     };
     ESP_ERROR_CHECK( esp_console_cmd_register(&autorun_get_cmd) );
 
@@ -293,13 +283,11 @@ void register_autorun()
     ESP_ERROR_CHECK( esp_console_cmd_register(&autorun_set_cmd) );
 
     //Command: autorun_erase
-    erase_args.end = arg_end(2);
     const esp_console_cmd_t autorun_erase_cmd = {
         .command = "autorun_erase",
         .help = "autorun erase command",
         .hint = NULL,
         .func = &fn_autorun_cmd_erase,
-        .argtable = &erase_args
     };
     ESP_ERROR_CHECK( esp_console_cmd_register(&autorun_erase_cmd) );
 
